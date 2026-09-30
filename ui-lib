@@ -10,6 +10,7 @@
 --   Dragging
 --   Scrolling
 --   Tween animations
+--   Destroy (disconnects listeners and removes the window)
 
 local tween_service = game:GetService("TweenService")
 local user_input_service = game:GetService("UserInputService")
@@ -17,6 +18,9 @@ local user_input_service = game:GetService("UserInputService")
 local library = {
     flags = {}
 }
+
+-- connections that aren't tied to a UI instance (and so wouldn't die with it)
+local connections = {}
 
 local window_open = false
 
@@ -112,6 +116,9 @@ function library:create_window(title, base_width)
 
     parentGui(uI)
 
+    -- keep a handle on the ScreenGui so library:destroy can remove it
+    library.gui = uI
+
     -- Window dragging
     local start_mouse_pos
     local start_frame_pos
@@ -125,7 +132,7 @@ function library:create_window(title, base_width)
         end
     end)
 
-    user_input_service.InputChanged:Connect(function(input)
+    table.insert(connections, user_input_service.InputChanged:Connect(function(input)
         if is_dragging then
             local delta = input.Position - start_mouse_pos
 
@@ -134,15 +141,15 @@ function library:create_window(title, base_width)
                 start_frame_pos.Y.Offset + delta.Y
             )
         end
-    end)
+    end))
 
-    user_input_service.InputEnded:Connect(function(input)
+    table.insert(connections, user_input_service.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             is_dragging = false
             start_frame_pos = nil
             start_mouse_pos = nil
         end
-    end)
+    end))
 
     local current_y = 44
 
@@ -609,6 +616,23 @@ function library:add_section(title)
     end
 
     return components
+end
+
+-- disconnects everything that outlives the window, then removes the window itself
+function library:destroy()
+    for _, connection in next, connections do
+        connection:Disconnect()
+    end
+    table.clear(connections)
+
+    if library.gui then
+        library.gui:Destroy()
+        library.gui = nil
+    end
+
+    library.content = nil
+    active_section = nil
+    window_open = false
 end
 
 return library
